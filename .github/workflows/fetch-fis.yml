@@ -9,6 +9,9 @@ jobs:
   fetch-fis:
     runs-on: ubuntu-latest
 
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
@@ -16,10 +19,26 @@ jobs:
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
+
+      - name: Check Node version
+        run: node -v
 
       - name: Install dependencies
         run: npm install
+
+      - name: Verify required files
+        run: |
+          test -f package.json
+          test -f scripts/fetch-fis.ts
+
+      - name: Verify secrets exist
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          test -n "$SUPABASE_URL"
+          test -n "$SUPABASE_SERVICE_ROLE_KEY"
 
       - name: Fetch FIS data
         env:
