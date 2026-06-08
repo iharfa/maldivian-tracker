@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Activity, AlertTriangle, CalendarClock, Clock3, Plane, Radar, RefreshCcw, ShieldCheck, TimerReset } from 'lucide-react';
+import { Analytics } from '@vercel/analytics/react';
 import logo from './assets/maldivian-logo.png';
 import { hasSupabaseConfig, supabase } from './lib/supabase';
 import { demoLogs, demoOccurrences, demoRuns } from './lib/demoData';
@@ -291,6 +292,7 @@ function App() {
         <span>Data source: Velana International Airport FIS XML snapshots.</span>
         <span>Delay rule: status contains delay or estimated time is 15 minutes later than scheduled time.</span>
       </footer>
+      <Analytics />
     </main>
   );
 }
