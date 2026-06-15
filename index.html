@@ -1,16 +1,142 @@
 <!doctype html>
-<html lang="en">
+<html class="dark" lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#111827" />
+    <meta name="theme-color" content="#060e20" />
     <meta
       name="description"
       content="A public delay counter for Maldivian Airlines flights using FIS snapshots."
     />
-    <title>Maldivian Delay Counter</title>
+    <title>Maldivian Delay Counter | Live Dashboard</title>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600&display=swap"
+      rel="stylesheet"
+    />
+    <script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "on-secondary-fixed-variant": "#004c6b",
+              "on-primary-container": "#f7f9ff",
+              "on-secondary-fixed": "#001e2d",
+              secondary: "#81cfff",
+              "primary-container": "#0077be",
+              "secondary-fixed-dim": "#81cfff",
+              "surface-container-high": "#222a3d",
+              "surface-tint": "#9acbff",
+              "on-surface-variant": "#c0c7d2",
+              "primary-fixed-dim": "#9acbff",
+              "on-background": "#dae2fd",
+              "surface-bright": "#31394d",
+              "on-primary": "#003355",
+              "on-tertiary": "#4e2600",
+              "on-error-container": "#ffdad6",
+              tertiary: "#ffb77f",
+              "secondary-container": "#00a3e0",
+              "on-primary-fixed": "#001d34",
+              "on-tertiary-container": "#fff8f5",
+              "outline-variant": "#404751",
+              "inverse-primary": "#00629e",
+              primary: "#9acbff",
+              "error-container": "#93000a",
+              "surface-container": "#171f33",
+              outline: "#8a919c",
+              "inverse-on-surface": "#283044",
+              "tertiary-fixed": "#ffdcc4",
+              "on-error": "#690005",
+              "on-secondary-container": "#00354c",
+              "surface-dim": "#0b1326",
+              "tertiary-fixed-dim": "#ffb77f",
+              "primary-fixed": "#cfe5ff",
+              "surface-container-low": "#131b2e",
+              "secondary-fixed": "#c6e7ff",
+              "surface-container-lowest": "#060e20",
+              background: "#0b1326",
+              "on-primary-fixed-variant": "#004a79",
+              surface: "#0b1326",
+              "surface-variant": "#2d3449",
+              error: "#ffb4ab",
+              "on-tertiary-fixed-variant": "#6f3800",
+              "on-secondary": "#00344b",
+              "inverse-surface": "#dae2fd",
+              "tertiary-container": "#af5d02",
+              "surface-container-highest": "#2d3449",
+              "on-surface": "#dae2fd",
+              "on-tertiary-fixed": "#2f1500"
+            },
+            borderRadius: { DEFAULT: "0.25rem", lg: "0.5rem", xl: "0.75rem", full: "9999px" },
+            spacing: {
+              lg: "40px",
+              base: "4px",
+              "margin-desktop": "32px",
+              md: "24px",
+              sm: "16px",
+              xl: "64px",
+              "margin-mobile": "16px",
+              gutter: "20px",
+              xs: "8px"
+            },
+            fontFamily: {
+              "data-label": ["JetBrains Mono"],
+              "metric-value": ["Inter"],
+              "headline-lg": ["Inter"],
+              "body-md": ["Inter"],
+              "display-lg": ["Inter"]
+            },
+            fontSize: {
+              "data-label": ["12px", { lineHeight: "1.2", letterSpacing: "0.05em", fontWeight: "500" }],
+              "metric-value": ["40px", { lineHeight: "1", fontWeight: "600" }],
+              "headline-lg": ["32px", { lineHeight: "1.2", fontWeight: "700" }],
+              "body-md": ["16px", { lineHeight: "1.5", fontWeight: "400" }],
+              "display-lg": ["48px", { lineHeight: "1.1", letterSpacing: "-0.02em", fontWeight: "800" }]
+            }
+          }
+        }
+      };
+    </script>
+    <style>
+      body {
+        background-color: #060e20;
+        color: #dae2fd;
+        -webkit-font-smoothing: antialiased;
+      }
+      .glass-panel {
+        background: rgba(255, 255, 255, 0.05);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.1);
+      }
+      .glass-panel-active {
+        background: rgba(255, 255, 255, 0.08);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+      }
+      .scanning-line {
+        position: relative;
+        overflow: hidden;
+      }
+      .scanning-line::after {
+        content: "";
+        position: absolute;
+        top: -100%;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(to bottom, transparent, rgba(154, 203, 255, 0.05), transparent);
+        animation: scan 4s linear infinite;
+      }
+      @keyframes scan {
+        0% { transform: translateY(0); }
+        100% { transform: translateY(200%); }
+      }
+      .airport-glow { text-shadow: 0 0 12px rgba(154, 203, 255, 0.4); }
+      .critical-glow { text-shadow: 0 0 15px rgba(255, 180, 171, 0.6); color: #ffb4ab; }
+    </style>
   </head>
-  <body>
+  <body class="font-body-md text-body-md overflow-x-hidden">
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>

@@ -112,29 +112,68 @@ function calculateLongestStreak(dataStart: Date | null, delayedOccurrences: Flig
   return streaks.sort((a, b) => b.durationMs - a.durationMs)[0] ?? null;
 }
 
-export function getDailyDelayCounts(occurrences: FlightOccurrence[]) {
+export function relativeTime(value: Date | null | undefined): string {
+  if (!value) return 'no data yet';
+  const diff = Date.now() - value.getTime();
+  if (diff < MINUTE_MS) return 'just now';
+  if (diff < HOUR_MS) {
+    const m = Math.floor(diff / MINUTE_MS);
+    return `${m} min${m === 1 ? '' : 's'} ago`;
+  }
+  if (diff < DAY_MS) {
+    const h = Math.floor(diff / HOUR_MS);
+    return `${h} hour${h === 1 ? '' : 's'} ago`;
+  }
+  const d = Math.floor(diff / DAY_MS);
+  return `${d} day${d === 1 ? '' : 's'} ago`;
+}
+
+function maldivesDay(date: Date): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Indian/Maldives',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit'
+  }).format(date);
+}
+
+export type DailySeriesPoint = { date: string; count: number; minutes: number };
+
+// Continuous daily delay series from the earliest record to today (gaps filled with 0),
+// so the chart has a real time axis to zoom across. count = number of delayed flights,
+// minutes = summed delay duration that day.
+export function getDailyDelaySeries(occurrences: FlightOccurrence[], now = new Date()): DailySeriesPoint[] {
   const counts = new Map<string, number>();
+  const minutes = new Map<string, number>();
+  let earliest: Date | null = null;
 
   for (const item of occurrences) {
-    if (!item.was_delayed || !item.first_delayed_at) continue;
+    const seen = parseDate(item.first_seen_at) ?? parseDate(item.scheduled_at);
+    if (seen && (!earliest || seen < earliest)) earliest = seen;
 
-    const date = parseDate(item.first_delayed_at);
-    if (!date) continue;
-
-    const key = new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'Indian/Maldives',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
-    }).format(date);
-
-    counts.set(key, (counts.get(key) ?? 0) + 1);
+    if (item.was_delayed && item.first_delayed_at) {
+      const date = parseDate(item.first_delayed_at);
+      if (date) {
+        const key = maldivesDay(date);
+        counts.set(key, (counts.get(key) ?? 0) + 1);
+        minutes.set(key, (minutes.get(key) ?? 0) + (item.max_delay_minutes || 0));
+      }
+    }
   }
 
-  return [...counts.entries()]
-    .sort(([a], [b]) => a.localeCompare(b))
-    .slice(-14)
-    .map(([date, count]) => ({ date, count }));
+  if (!earliest) return [];
+
+  const points: DailySeriesPoint[] = [];
+  const todayKey = maldivesDay(now);
+  let cursor = new Date(earliest.getTime());
+  // ponytail: 1000-day cap is a runaway guard; real data spans weeks.
+  for (let i = 0; i < 1000; i += 1) {
+    const key = maldivesDay(cursor);
+    points.push({ date: key, count: counts.get(key) ?? 0, minutes: minutes.get(key) ?? 0 });
+    if (key === todayKey) break;
+    cursor = new Date(cursor.getTime() + DAY_MS);
+  }
+  return points;
 }
 
 export function computeMetrics(runs: CollectionRun[], logs: FlightLog[], occurrences: FlightOccurrence[]): DashboardMetrics {
@@ -175,12 +214,14 @@ export function computeMetrics(runs: CollectionRun[], logs: FlightLog[], occurre
   }).length;
 
   const currentlyDelayed = logs.filter((log) => log.is_delayed).length;
+  const totalDelayMinutes = delayedOccurrences.reduce((sum, item) => sum + (item.max_delay_minutes || 0), 0);
 
   return {
     dataStart,
     lastUpdated,
     lastDelay,
     totalDelayedFlights: delayedOccurrences.length,
+    totalDelayMinutes,
     currentStreak,
     longestStreak: calculateLongestStreak(dataStart, delayedOccurrences, now),
     delayedLast24Hours,
