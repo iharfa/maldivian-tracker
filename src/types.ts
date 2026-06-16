@@ -71,6 +71,7 @@ export type DashboardMetrics = {
   lastDelay: FlightOccurrence | null;
   totalDelayedFlights: number;
   totalDelayMinutes: number;
+  longestDelay: FlightOccurrence | null;
   currentStreak: Streak | null;
   longestStreak: Streak | null;
   delayedLast24Hours: number;

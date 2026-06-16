@@ -112,20 +112,22 @@ function MetricCard({
   label,
   value,
   detail,
-  icon
+  icon,
+  valueClassName = 'font-metric-value text-metric-value'
 }: {
   label: string;
   value: string | number;
   detail?: string;
   icon: React.ReactNode;
+  valueClassName?: string;
 }) {
   return (
-    <div className="glass-panel p-lg rounded-xl scanning-line transition-all group hover:bg-white/10 hover:scale-105">
+    <div className="glass-panel p-lg rounded-xl scanning-line transition-all group hover:bg-white/10 hover:scale-105 flex flex-col">
       <div className="flex justify-between items-start mb-md">
         <div className="font-data-label text-data-label text-on-surface-variant uppercase">{label}</div>
         {icon}
       </div>
-      <div className="font-metric-value text-metric-value text-on-surface group-hover:text-primary transition-colors">
+      <div className={`${valueClassName} text-on-surface group-hover:text-primary transition-colors flex-1 flex items-center`}>
         {value}
       </div>
       {detail ? <div className="text-data-label text-on-surface-variant mt-xs">{detail}</div> : null}
@@ -512,16 +514,19 @@ function App() {
           label="Total delayed flights"
           value={metrics.totalDelayedFlights.toLocaleString()}
           detail="Unique occurrences since launch"
+          valueClassName="font-display-lg text-[56px] md:text-[72px] leading-none"
           icon={<AlertTriangle className="text-error" size={22} />}
         />
         <MetricCard
           label="Delays last 24h"
           value={metrics.delayedLast24Hours}
+          valueClassName="font-display-lg text-[56px] md:text-[72px] leading-none"
           icon={<Activity className="text-secondary" size={22} />}
         />
         <MetricCard
           label="Delays last 7d"
           value={metrics.delayedLast7Days}
+          valueClassName="font-display-lg text-[56px] md:text-[72px] leading-none"
           icon={<CalendarClock className="text-secondary" size={22} />}
         />
         <MetricCard
@@ -536,21 +541,38 @@ function App() {
         />
       </section>
 
-      <section className="max-w-[1440px] mx-auto px-margin-mobile md:px-margin-desktop pb-xl">
-        <div className="glass-panel scanning-line rounded-xl p-lg flex flex-col md:flex-row md:items-center md:justify-between gap-sm bg-primary/10 border-primary/40">
-          <div className="flex items-center gap-md">
-            <Hourglass className="text-primary" size={28} />
+      <section className="max-w-[1440px] mx-auto px-margin-mobile md:px-margin-desktop pb-xl grid grid-cols-1 md:grid-cols-2 gap-gutter">
+        <div className="glass-panel scanning-line rounded-xl p-lg bg-primary/10 border-primary/40">
+          <div className="flex items-center gap-sm mb-sm">
+            <Hourglass className="text-primary" size={24} />
             <div className="font-data-label text-data-label text-on-surface-variant uppercase">
               Total time Maldivian flights have spent delayed
             </div>
           </div>
-          <div className="text-right">
-            <div className="font-display-lg text-display-lg text-primary airport-glow leading-none">
-              {metrics.totalDelayMinutes > 0 ? formatDuration(metrics.totalDelayMinutes * 60000) : 'No delays yet'}
+          <div className="font-display-lg text-display-lg text-primary airport-glow leading-none">
+            {metrics.totalDelayMinutes > 0 ? formatDuration(metrics.totalDelayMinutes * 60000) : 'No delays yet'}
+          </div>
+          <div className="text-data-label text-on-surface-variant mt-xs">
+            across {metrics.totalDelayedFlights.toLocaleString()} delayed flights since {formatDateTime(metrics.dataStart)}
+          </div>
+        </div>
+
+        <div className="glass-panel scanning-line rounded-xl p-lg bg-error/10 border-error/40">
+          <div className="flex items-center gap-sm mb-sm">
+            <AlertTriangle className="text-error" size={24} />
+            <div className="font-data-label text-data-label text-on-surface-variant uppercase">
+              Longest delayed flight so far
             </div>
-            <div className="text-data-label text-on-surface-variant mt-xs">
-              across {metrics.totalDelayedFlights.toLocaleString()} delayed flights since {formatDateTime(metrics.dataStart)}
-            </div>
+          </div>
+          <div className="font-display-lg text-display-lg text-error critical-glow leading-none">
+            {metrics.longestDelay && metrics.longestDelay.max_delay_minutes > 0
+              ? formatDuration(metrics.longestDelay.max_delay_minutes * 60000)
+              : 'No delays yet'}
+          </div>
+          <div className="text-data-label text-on-surface-variant mt-xs">
+            {metrics.longestDelay && metrics.longestDelay.max_delay_minutes > 0
+              ? `${metrics.longestDelay.flight_number} · ${routeLabel(metrics.longestDelay)} · ${formatDateTime(metrics.longestDelay.first_delayed_at)}`
+              : 'Waiting for the first delay'}
           </div>
         </div>
       </section>

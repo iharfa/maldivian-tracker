@@ -215,6 +215,10 @@ export function computeMetrics(runs: CollectionRun[], logs: FlightLog[], occurre
 
   const currentlyDelayed = logs.filter((log) => log.is_delayed).length;
   const totalDelayMinutes = delayedOccurrences.reduce((sum, item) => sum + (item.max_delay_minutes || 0), 0);
+  const longestDelay = delayedOccurrences.reduce<FlightOccurrence | null>(
+    (max, item) => (!max || item.max_delay_minutes > max.max_delay_minutes ? item : max),
+    null
+  );
 
   return {
     dataStart,
@@ -222,6 +226,7 @@ export function computeMetrics(runs: CollectionRun[], logs: FlightLog[], occurre
     lastDelay,
     totalDelayedFlights: delayedOccurrences.length,
     totalDelayMinutes,
+    longestDelay,
     currentStreak,
     longestStreak: calculateLongestStreak(dataStart, delayedOccurrences, now),
     delayedLast24Hours,
