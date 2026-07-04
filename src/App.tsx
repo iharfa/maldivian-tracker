@@ -151,6 +151,7 @@ function DelayTrend({ occurrences }: { occurrences: OccurrenceStat[] }) {
       grid: { top: 48, right: 48, bottom: 64, left: 40 },
       legend: {
         data: ['Flights operated', 'Delayed flights', 'Hours delayed'],
+        selected: { 'Flights operated': false },
         right: 0,
         top: 0,
         icon: 'roundRect',
@@ -214,9 +215,20 @@ function DelayTrend({ occurrences }: { occurrences: OccurrenceStat[] }) {
           type: 'bar',
           yAxisIndex: 0,
           z: 1,
-          data: series.map((d) => d.total),
+          data: series.map((d) => ({
+            value: d.total,
+            pct: d.total > 0 ? Math.round((d.count / d.total) * 100) : 0
+          })),
           itemStyle: { color: 'rgba(154,203,255,0.18)', borderRadius: [3, 3, 0, 0] },
-          emphasis: { itemStyle: { color: 'rgba(154,203,255,0.3)' } }
+          emphasis: { itemStyle: { color: 'rgba(154,203,255,0.3)' } },
+          label: {
+            show: true,
+            position: 'top',
+            color: '#c0c7d2',
+            fontFamily: 'JetBrains Mono',
+            fontSize: 10,
+            formatter: (p: { data: { value: number; pct: number } }) => (p.data.value > 0 ? `${p.data.pct}%` : '')
+          }
         },
         {
           name: 'Delayed flights',
