@@ -137,27 +137,28 @@ function maldivesDay(date: Date): string {
   }).format(date);
 }
 
-export type DailySeriesPoint = { date: string; count: number; minutes: number };
+export type DailySeriesPoint = { date: string; total: number; count: number; minutes: number };
 
-// Continuous daily delay series from the earliest record to today (gaps filled with 0),
-// so the chart has a real time axis to zoom across. count = number of delayed flights,
-// minutes = summed delay duration that day.
+// Continuous daily series from the earliest record to today (gaps filled with 0), so the
+// chart has a real time axis to zoom across. Everything is keyed to the operating day
+// (scheduled) so delayed is a true subset of total. total = flights operated,
+// count = delayed flights, minutes = summed delay duration that day.
 export function getDailyDelaySeries(occurrences: FlightOccurrence[], now = new Date()): DailySeriesPoint[] {
+  const totals = new Map<string, number>();
   const counts = new Map<string, number>();
   const minutes = new Map<string, number>();
   let earliest: Date | null = null;
 
   for (const item of occurrences) {
-    const seen = parseDate(item.first_seen_at) ?? parseDate(item.scheduled_at);
-    if (seen && (!earliest || seen < earliest)) earliest = seen;
+    const day = parseDate(item.scheduled_at) ?? parseDate(item.first_seen_at);
+    if (!day) continue;
+    if (!earliest || day < earliest) earliest = day;
 
-    if (item.was_delayed && item.first_delayed_at) {
-      const date = parseDate(item.first_delayed_at);
-      if (date) {
-        const key = maldivesDay(date);
-        counts.set(key, (counts.get(key) ?? 0) + 1);
-        minutes.set(key, (minutes.get(key) ?? 0) + (item.max_delay_minutes || 0));
-      }
+    const key = maldivesDay(day);
+    totals.set(key, (totals.get(key) ?? 0) + 1);
+    if (item.was_delayed) {
+      counts.set(key, (counts.get(key) ?? 0) + 1);
+      minutes.set(key, (minutes.get(key) ?? 0) + (item.max_delay_minutes || 0));
     }
   }
 
@@ -169,7 +170,12 @@ export function getDailyDelaySeries(occurrences: FlightOccurrence[], now = new D
   // ponytail: 1000-day cap is a runaway guard; real data spans weeks.
   for (let i = 0; i < 1000; i += 1) {
     const key = maldivesDay(cursor);
-    points.push({ date: key, count: counts.get(key) ?? 0, minutes: minutes.get(key) ?? 0 });
+    points.push({
+      date: key,
+      total: totals.get(key) ?? 0,
+      count: counts.get(key) ?? 0,
+      minutes: minutes.get(key) ?? 0
+    });
     if (key === todayKey) break;
     cursor = new Date(cursor.getTime() + DAY_MS);
   }

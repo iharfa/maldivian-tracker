@@ -149,7 +149,7 @@ function DelayTrend({ occurrences }: { occurrences: FlightOccurrence[] }) {
       backgroundColor: 'transparent',
       grid: { top: 48, right: 48, bottom: 64, left: 40 },
       legend: {
-        data: ['Delayed flights', 'Hours delayed'],
+        data: ['Flights operated', 'Delayed flights', 'Hours delayed'],
         right: 0,
         top: 0,
         icon: 'roundRect',
@@ -209,9 +209,20 @@ function DelayTrend({ occurrences }: { occurrences: FlightOccurrence[] }) {
       ],
       series: [
         {
+          name: 'Flights operated',
+          type: 'bar',
+          yAxisIndex: 0,
+          z: 1,
+          data: series.map((d) => d.total),
+          itemStyle: { color: 'rgba(154,203,255,0.18)', borderRadius: [3, 3, 0, 0] },
+          emphasis: { itemStyle: { color: 'rgba(154,203,255,0.3)' } }
+        },
+        {
           name: 'Delayed flights',
           type: 'bar',
           yAxisIndex: 0,
+          z: 2,
+          barGap: '-100%',
           data: series.map((d) => d.count),
           itemStyle: { color: '#81cfff', borderRadius: [3, 3, 0, 0] },
           emphasis: { itemStyle: { color: '#9acbff' } }
@@ -244,7 +255,7 @@ function DelayTrend({ occurrences }: { occurrences: FlightOccurrence[] }) {
         <div>
           <h2 className="font-headline-lg text-headline-lg text-on-surface">Delay Trend</h2>
           <p className="font-data-label text-data-label text-on-surface-variant mt-xs uppercase">
-            Per day · toggle the metrics top-right · drag the slider to pick a date range
+            Delayed vs operated flights per day · toggle metrics top-right · drag the slider to pick a range
           </p>
         </div>
       </div>
