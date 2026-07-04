@@ -58,6 +58,20 @@ export type FlightOccurrence = {
   first_cancelled_at: string | null;
 };
 
+// Minimal occurrence shape the dashboard actually consumes (seed + live share this).
+export type OccurrenceStat = Pick<
+  FlightOccurrence,
+  | 'occurrence_key'
+  | 'source'
+  | 'route'
+  | 'flight_number'
+  | 'scheduled_at'
+  | 'first_seen_at'
+  | 'was_delayed'
+  | 'first_delayed_at'
+  | 'max_delay_minutes'
+>;
+
 export type Streak = {
   from: Date;
   to: Date;
@@ -68,10 +82,10 @@ export type Streak = {
 export type DashboardMetrics = {
   dataStart: Date | null;
   lastUpdated: Date | null;
-  lastDelay: FlightOccurrence | null;
+  lastDelay: OccurrenceStat | null;
   totalDelayedFlights: number;
   totalDelayMinutes: number;
-  longestDelay: FlightOccurrence | null;
+  longestDelay: OccurrenceStat | null;
   currentStreak: Streak | null;
   longestStreak: Streak | null;
   delayedLast24Hours: number;

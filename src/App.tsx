@@ -14,7 +14,8 @@ import {
   parseDate,
   relativeTime
 } from './lib/metrics';
-import type { CollectionRun, FlightLog, FlightOccurrence, SourceType } from './types';
+import { SEED_CUTOFF, seedOccurrences } from './lib/seedData';
+import type { CollectionRun, FlightLog, OccurrenceStat, SourceType } from './types';
 
 type LoadState = 'idle' | 'loading' | 'ready' | 'error';
 
@@ -135,7 +136,7 @@ function MetricCard({
   );
 }
 
-function DelayTrend({ occurrences }: { occurrences: FlightOccurrence[] }) {
+function DelayTrend({ occurrences }: { occurrences: OccurrenceStat[] }) {
   const ref = useRef<HTMLDivElement>(null);
   const series = useMemo(() => getDailyDelaySeries(occurrences), [occurrences]);
 
@@ -349,7 +350,7 @@ function OperationsLog({ logs }: { logs: FlightLog[] }) {
   );
 }
 
-function LastDelayed({ occurrences }: { occurrences: FlightOccurrence[] }) {
+function LastDelayed({ occurrences }: { occurrences: OccurrenceStat[] }) {
   const rows = useMemo(
     () =>
       occurrences
@@ -408,7 +409,7 @@ function LastDelayed({ occurrences }: { occurrences: FlightOccurrence[] }) {
 function App() {
   const [logs, setLogs] = useState<FlightLog[]>([]);
   const [runs, setRuns] = useState<CollectionRun[]>([]);
-  const [occurrences, setOccurrences] = useState<FlightOccurrence[]>([]);
+  const [occurrences, setOccurrences] = useState<OccurrenceStat[]>([]);
   const [state, setState] = useState<LoadState>('idle');
   const [error, setError] = useState<string | null>(null);
 
@@ -424,31 +425,33 @@ function App() {
       return;
     }
 
-    const [logsResult, runsResult, occurrencesResult] = await Promise.all([
-      supabase.from('flight_logs').select('*').order('captured_at', { ascending: false }).limit(5),
-      supabase.from('collection_runs').select('*').order('captured_at', { ascending: false }).limit(2000),
-      supabase
+    const db = supabase;
+    try {
+      const [logsResult, runsResult] = await Promise.all([
+        db.from('flight_logs').select('*').order('captured_at', { ascending: false }).limit(5),
+        db.from('collection_runs').select('*').order('captured_at', { ascending: false }).limit(2000)
+      ]);
+      if (logsResult.error) throw logsResult.error;
+      if (runsResult.error) throw runsResult.error;
+
+      // Older occurrences are baked into seedData; only fetch today-onward (< 1000 rows)
+      // and concatenate. Disjoint by first_seen_at, so no dedup needed.
+      const { data, error } = await db
         .from('flight_occurrences')
-        .select('*')
-        .order('first_delayed_at', { ascending: true, nullsFirst: false })
-        .limit(5000)
-    ]);
+        .select('occurrence_key,source,route,flight_number,scheduled_at,first_seen_at,was_delayed,first_delayed_at,max_delay_minutes')
+        .gte('first_seen_at', SEED_CUTOFF)
+        .order('first_seen_at', { ascending: true });
+      if (error) throw error;
+      const recent = (data ?? []) as OccurrenceStat[];
 
-    if (logsResult.error || runsResult.error || occurrencesResult.error) {
+      setLogs((logsResult.data ?? []) as FlightLog[]);
+      setRuns((runsResult.data ?? []) as CollectionRun[]);
+      setOccurrences([...seedOccurrences, ...recent]);
+      setState('ready');
+    } catch (err) {
       setState('error');
-      setError(
-        logsResult.error?.message ||
-          runsResult.error?.message ||
-          occurrencesResult.error?.message ||
-          'Could not load dashboard data.'
-      );
-      return;
+      setError(err instanceof Error ? err.message : 'Could not load dashboard data.');
     }
-
-    setLogs((logsResult.data ?? []) as FlightLog[]);
-    setRuns((runsResult.data ?? []) as CollectionRun[]);
-    setOccurrences((occurrencesResult.data ?? []) as FlightOccurrence[]);
-    setState('ready');
   }, []);
 
   useEffect(() => {

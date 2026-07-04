@@ -1,4 +1,4 @@
-import type { CollectionRun, DashboardMetrics, FlightLog, FlightOccurrence, Streak } from '../types';
+import type { CollectionRun, DashboardMetrics, FlightLog, OccurrenceStat, Streak } from '../types';
 
 const DAY_MS = 86400000;
 const HOUR_MS = 3600000;
@@ -45,7 +45,7 @@ export function getWholeDays(ms: number): number {
   return Math.max(0, Math.floor(ms / DAY_MS));
 }
 
-function getEarliestDate(runs: CollectionRun[], logs: FlightLog[], occurrences: FlightOccurrence[]): Date | null {
+function getEarliestDate(runs: CollectionRun[], logs: FlightLog[], occurrences: OccurrenceStat[]): Date | null {
   const dates = [
     ...runs.map((run) => parseDate(run.captured_at)),
     ...logs.map((log) => parseDate(log.captured_at)),
@@ -66,7 +66,7 @@ function getLastUpdated(runs: CollectionRun[], logs: FlightLog[]): Date | null {
   return new Date(Math.max(...dates.map((date) => date.getTime())));
 }
 
-function calculateLongestStreak(dataStart: Date | null, delayedOccurrences: FlightOccurrence[], now: Date): Streak | null {
+function calculateLongestStreak(dataStart: Date | null, delayedOccurrences: OccurrenceStat[], now: Date): Streak | null {
   if (!dataStart) return null;
 
   const events = delayedOccurrences
@@ -143,7 +143,7 @@ export type DailySeriesPoint = { date: string; total: number; count: number; min
 // chart has a real time axis to zoom across. Everything is keyed to the operating day
 // (scheduled) so delayed is a true subset of total. total = flights operated,
 // count = delayed flights, minutes = summed delay duration that day.
-export function getDailyDelaySeries(occurrences: FlightOccurrence[], now = new Date()): DailySeriesPoint[] {
+export function getDailyDelaySeries(occurrences: OccurrenceStat[], now = new Date()): DailySeriesPoint[] {
   const totals = new Map<string, number>();
   const counts = new Map<string, number>();
   const minutes = new Map<string, number>();
@@ -182,7 +182,7 @@ export function getDailyDelaySeries(occurrences: FlightOccurrence[], now = new D
   return points;
 }
 
-export function computeMetrics(runs: CollectionRun[], logs: FlightLog[], occurrences: FlightOccurrence[]): DashboardMetrics {
+export function computeMetrics(runs: CollectionRun[], logs: FlightLog[], occurrences: OccurrenceStat[]): DashboardMetrics {
   const now = new Date();
   const delayedOccurrences = occurrences.filter((item) => item.was_delayed && item.first_delayed_at);
   const dataStart = getEarliestDate(runs, logs, occurrences);
@@ -221,7 +221,7 @@ export function computeMetrics(runs: CollectionRun[], logs: FlightLog[], occurre
 
   const currentlyDelayed = logs.filter((log) => log.is_delayed).length;
   const totalDelayMinutes = delayedOccurrences.reduce((sum, item) => sum + (item.max_delay_minutes || 0), 0);
-  const longestDelay = delayedOccurrences.reduce<FlightOccurrence | null>(
+  const longestDelay = delayedOccurrences.reduce<OccurrenceStat | null>(
     (max, item) => (!max || item.max_delay_minutes > max.max_delay_minutes ? item : max),
     null
   );
