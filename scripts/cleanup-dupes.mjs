@@ -167,5 +167,85 @@ for (const o of classB) {
   );
 }
 
+// ---- Class C: delay flag whose evidence log carries a different raw operating date ----
+// FIS pre-publishes future flights (sometimes days ahead) with retimed estimates; the
+// old date stamping booked those as delays on the wrong day. Audit every delayed row:
+// the log that first flagged the delay must have raw.Date matching the row's own
+// scheduled date. On mismatch, recompute the row from its own-date logs only.
+const mvtDate = (iso) => new Date(ts(iso) + 5 * 3600e3).toISOString().slice(0, 10).replace(/-/g, '');
+const delayedRows = occ.filter((o) => !aKeys.has(o.occurrence_key) && o.was_delayed && o.first_delayed_at && o.scheduled_at);
+
+const classC = [];
+{
+  const queue = [...delayedRows];
+  const workers = Array.from({ length: 8 }, async () => {
+    for (let o = queue.pop(); o; o = queue.pop()) {
+      const [log] = await rest(
+        `flight_logs?select=captured_at,raw->>Date&occurrence_key=eq.${o.occurrence_key}&captured_at=gte.${encodeURIComponent(o.first_delayed_at)}&order=captured_at.asc&limit=1`
+      );
+      const rawDate = log?.Date?.trim();
+      if (rawDate && rawDate !== mvtDate(o.scheduled_at)) classC.push({ o, rawDate });
+    }
+  });
+  await Promise.all(workers);
+}
+console.log(`\nClass C delays flagged by another day's raw data: ${classC.length}`);
+
+for (const { o, rawDate } of classC) {
+  const own = await rest(
+    `flight_logs?select=captured_at,is_delayed,delay_minutes&occurrence_key=eq.${o.occurrence_key}&raw->>Date=eq.${mvtDate(o.scheduled_at)}&order=captured_at.asc&limit=1000`
+  );
+  const ownDelayed = own.filter((l) => l.is_delayed || (l.delay_minutes ?? 0) >= DELAY_THRESHOLD);
+  const patch = {
+    was_delayed: ownDelayed.length > 0,
+    first_delayed_at: ownDelayed[0]?.captured_at ?? null,
+    max_delay_minutes: Math.max(0, ...own.map((l) => l.delay_minutes ?? 0))
+  };
+  if (APPLY) {
+    await rest(`flight_occurrences?occurrence_key=eq.${o.occurrence_key}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+      headers: { Prefer: 'return=minimal' }
+    });
+  }
+  console.log(
+    ` C ${o.flight_number} sched=${o.scheduled_at} max=${o.max_delay_minutes}m flagged by raw.Date=${rawDate} -> own-day delayed=${patch.was_delayed} max=${patch.max_delay_minutes}m (${own.length} own-day logs)`
+  );
+}
+
+// ---- Class D: delay flagged more than 12h before the row's own scheduled time ----
+// At midnight FIS re-dates a still-active overnight flight to its arrival day, so the
+// previous evening's delay lands on the next day's row. A real estimate never precedes
+// its schedule by 12h. Recompute from logs captured near the actual operating window.
+const classD = delayedRows.filter(
+  (o) => !classC.some((c) => c.o === o) && ts(o.scheduled_at) - ts(o.first_delayed_at) > STALE_GAP
+);
+console.log(`\nClass D delays flagged >12h before own schedule: ${classD.length}`);
+
+for (const o of classD) {
+  const from = new Date(ts(o.scheduled_at) - STALE_GAP).toISOString();
+  const own = await rest(
+    `flight_logs?select=captured_at,is_delayed,delay_minutes&occurrence_key=eq.${o.occurrence_key}&captured_at=gte.${encodeURIComponent(from)}&order=captured_at.asc&limit=1000`
+  );
+  const ownDelayed = own.filter((l) => l.is_delayed || (l.delay_minutes ?? 0) >= DELAY_THRESHOLD);
+  const patch = {
+    was_delayed: ownDelayed.length > 0,
+    first_delayed_at: ownDelayed[0]?.captured_at ?? null,
+    max_delay_minutes: Math.max(0, ...own.map((l) => l.delay_minutes ?? 0))
+  };
+  if (APPLY) {
+    await rest(`flight_occurrences?occurrence_key=eq.${o.occurrence_key}`, {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+      headers: { Prefer: 'return=minimal' }
+    });
+  }
+  console.log(
+    ` D ${o.flight_number} sched=${o.scheduled_at} max=${o.max_delay_minutes}m flagged=${o.first_delayed_at} -> own-window delayed=${patch.was_delayed} max=${patch.max_delay_minutes}m`
+  );
+}
+
 console.log(`\n${APPLY ? 'APPLIED' : 'DRY RUN — no writes made. Re-run with APPLY=1 to apply.'}`);
-console.log(`Summary: ${classA.length} phantom rows ${APPLY ? 'deleted' : 'would be deleted'}, ${classB.length} absorbed rows ${APPLY ? 'repaired' : 'would be repaired'}.`);
+console.log(
+  `Summary: ${classA.length} phantom rows ${APPLY ? 'deleted' : 'would be deleted'}, ${classB.length} absorbed rows and ${classC.length + classD.length} misattributed delay flags ${APPLY ? 'repaired' : 'would be repaired'}.`
+);

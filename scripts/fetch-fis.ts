@@ -182,8 +182,23 @@ function normalizeFlight(record: RawFlight, source: SourceType, capturedAt: Date
 
   const dateText = firstText(record, ['Date', 'DATE', 'FlightDate']);
   const updateTime = parseMaldivesDateTime(fisUpdateTimeText);
-  const scheduledAtDate = combineDateAndTime(dateText, scheduledText, updateTime);
-  const estimatedAtDate = adjustEstimateAroundSchedule(combineDateAndTime(dateText, estimatedText, updateTime), scheduledAtDate);
+  let scheduledAtDate = combineDateAndTime(dateText, scheduledText, updateTime);
+  const rawEstimated = combineDateAndTime(dateText, estimatedText, updateTime);
+
+  // At midnight FIS re-dates a still-active overnight flight to its arrival day, so the
+  // row claims tomorrow's schedule with an estimate that is happening right now. A real
+  // estimate never precedes its schedule by 12+ hours — attribute the flight back to
+  // the previous day so the delay lands on the flight that actually ran late.
+  if (
+    scheduledAtDate &&
+    rawEstimated &&
+    scheduledAtDate.getTime() - rawEstimated.getTime() > 12 * 36e5 &&
+    Math.abs(rawEstimated.getTime() - capturedAt.getTime()) < 3 * 36e5
+  ) {
+    scheduledAtDate = new Date(scheduledAtDate.getTime() - 24 * 36e5);
+  }
+
+  const estimatedAtDate = adjustEstimateAroundSchedule(rawEstimated, scheduledAtDate);
 
   const scheduledAt = scheduledAtDate ? scheduledAtDate.toISOString() : null;
   const estimatedAt = estimatedAtDate ? estimatedAtDate.toISOString() : null;
