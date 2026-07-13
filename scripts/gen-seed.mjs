@@ -10,7 +10,7 @@ import fs from 'node:fs';
 const U = 'https://jhqfednaiehimwkzfqle.supabase.co';
 const K = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpocWZlZG5haWVoaW13a3pmcWxlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA4MjAyMTMsImV4cCI6MjA5NjM5NjIxM30.WXUsykzYS9WHVFWWfWJIvaVwC4ad9gyyCSUqUj_Z8NU';
 // Bump this to the start of "today" (Maldives = UTC+5) whenever you regenerate.
-const CUTOFF = '2026-07-03T19:00:00Z';
+const CUTOFF = '2026-07-13T19:00:00Z';
 const SEL = 'occurrence_key,source,route,flight_number,scheduled_at,first_seen_at,was_delayed,first_delayed_at,max_delay_minutes';
 
 const all = [];
