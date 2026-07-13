@@ -36,18 +36,24 @@ const FIS_ENDPOINTS: Record<SourceType, string> = {
 
 const DELAY_THRESHOLD_MINUTES = Number(process.env.FIS_DELAY_THRESHOLD_MINUTES ?? '15');
 
+// FIS_DRY_RUN=1 fetches and parses the feed, prints what would be stored, and skips
+// Supabase entirely — for checking the parser against the live feed without credentials.
+const DRY_RUN = process.env.FIS_DRY_RUN === '1';
+
 const supabaseUrl = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!supabaseUrl || !serviceRoleKey) {
+if (!DRY_RUN && (!supabaseUrl || !serviceRoleKey)) {
   throw new Error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY. Add them as GitHub Actions secrets.');
 }
 
-const supabase = createClient(supabaseUrl, serviceRoleKey, {
-  auth: {
-    persistSession: false
-  }
-});
+const supabase = DRY_RUN
+  ? null
+  : createClient(supabaseUrl!, serviceRoleKey!, {
+      auth: {
+        persistSession: false
+      }
+    });
 
 const parser = new XMLParser({
   ignoreAttributes: false,
@@ -103,16 +109,26 @@ function parseMaldivesDateTime(value: string | null): Date | null {
   return null;
 }
 
-function combineWithUpdateDate(timeText: string | null, updateTime: Date | null): Date | null {
-  if (!timeText || !updateTime) return null;
+function combineDateAndTime(dateText: string | null, timeText: string | null, updateTime: Date | null): Date | null {
+  if (!timeText) return null;
 
   const fullDate = parseMaldivesDateTime(timeText);
   if (fullDate) return fullDate;
 
   const time = timeText.match(/(\d{1,2}):(\d{2})/);
   if (!time) return null;
-
   const [, hour, minute] = time;
+
+  // FIS lists each flight's operating day in <Date> (YYYYMMDD). Prefer it: after
+  // midnight the feed still carries yesterday's flights, and the UpdateTime date
+  // would stamp them a day ahead.
+  const flightDate = dateText?.match(/^(\d{4})(\d{2})(\d{2})$/);
+  if (flightDate) {
+    const [, year, month, day] = flightDate;
+    return new Date(`${year}-${month}-${day}T${hour.padStart(2, '0')}:${minute}:00+05:00`);
+  }
+
+  if (!updateTime) return null;
   const datePart = new Intl.DateTimeFormat('en-CA', {
     timeZone: 'Indian/Maldives',
     year: 'numeric',
@@ -164,9 +180,10 @@ function normalizeFlight(record: RawFlight, source: SourceType, capturedAt: Date
   const carrierType = firstText(record, ['CarrierType', 'carrier_type']);
   const route = routeText(record);
 
+  const dateText = firstText(record, ['Date', 'DATE', 'FlightDate']);
   const updateTime = parseMaldivesDateTime(fisUpdateTimeText);
-  const scheduledAtDate = combineWithUpdateDate(scheduledText, updateTime);
-  const estimatedAtDate = adjustEstimateAroundSchedule(combineWithUpdateDate(estimatedText, updateTime), scheduledAtDate);
+  const scheduledAtDate = combineDateAndTime(dateText, scheduledText, updateTime);
+  const estimatedAtDate = adjustEstimateAroundSchedule(combineDateAndTime(dateText, estimatedText, updateTime), scheduledAtDate);
 
   const scheduledAt = scheduledAtDate ? scheduledAtDate.toISOString() : null;
   const estimatedAt = estimatedAtDate ? estimatedAtDate.toISOString() : null;
@@ -175,9 +192,11 @@ function normalizeFlight(record: RawFlight, source: SourceType, capturedAt: Date
     ? Math.max(0, Math.round((estimatedAtDate.getTime() - scheduledAtDate.getTime()) / 60000))
     : null;
 
+  // FIS statuses are two-letter codes (LA landed, DP departed, CA cancelled, DL delayed);
+  // keep the word checks in case the feed ever switches to full text.
   const statusUpper = status?.toUpperCase() ?? '';
-  const isCancelled = statusUpper.includes('CANCEL');
-  const delayedByStatus = statusUpper.includes('DELAY');
+  const isCancelled = statusUpper.includes('CANCEL') || statusUpper === 'CA' || statusUpper === 'CX';
+  const delayedByStatus = statusUpper.includes('DELAY') || statusUpper === 'DL';
   const delayedByTime = delayMinutes !== null && delayMinutes >= DELAY_THRESHOLD_MINUTES;
   const isDelayed = delayedByStatus || delayedByTime;
 
@@ -238,6 +257,7 @@ async function fetchXml(source: SourceType): Promise<{ updateTime: string | null
 }
 
 async function saveRun(source: SourceType, capturedAt: Date, updateTime: string | null, flightsFound: number, maldivianFound: number, insertedLogs: number, error: string | null = null) {
+  if (!supabase) return;
   const { error: runError } = await supabase.from('collection_runs').insert({
     captured_at: capturedAt.toISOString(),
     source,
@@ -252,6 +272,7 @@ async function saveRun(source: SourceType, capturedAt: Date, updateTime: string 
 }
 
 async function upsertOccurrence(flight: NormalizedFlight) {
+  if (!supabase) return;
   const { data: existing, error: readError } = await supabase
     .from('flight_occurrences')
     .select('occurrence_key, was_delayed, first_delayed_at, max_delay_minutes, was_cancelled, first_cancelled_at')
@@ -338,7 +359,17 @@ async function collectSource(source: SourceType) {
 
     maldivianFound = normalized.length;
 
-    if (normalized.length > 0) {
+    if (DRY_RUN) {
+      console.log(`${source}: DRY RUN — ${maldivianFound} Maldivian flights of ${flightsFound} total (update time: ${updateTime})`);
+      for (const flight of normalized) {
+        console.log(
+          `  ${flight.flight_number} ${flight.route ?? '?'} sched=${flight.scheduled_time_text ?? '--'} (${flight.scheduled_at ?? 'unparsed'}) est=${flight.estimated_time_text ?? '--'} status=${flight.status ?? '--'} delayed=${flight.is_delayed} cancelled=${flight.is_cancelled} delayMin=${flight.delay_minutes ?? '-'}`
+        );
+      }
+      return;
+    }
+
+    if (normalized.length > 0 && supabase) {
       const { error } = await supabase.from('flight_logs').insert(normalized);
       if (error) throw error;
       insertedLogs = normalized.length;

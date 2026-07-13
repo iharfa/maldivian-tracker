@@ -446,15 +446,23 @@ function App() {
       if (logsResult.error) throw logsResult.error;
       if (runsResult.error) throw runsResult.error;
 
-      // Older occurrences are baked into seedData; only fetch today-onward (< 1000 rows)
-      // and concatenate. Disjoint by first_seen_at, so no dedup needed.
-      const { data, error } = await db
-        .from('flight_occurrences')
-        .select('occurrence_key,source,route,flight_number,scheduled_at,first_seen_at,was_delayed,first_delayed_at,max_delay_minutes')
-        .gte('first_seen_at', SEED_CUTOFF)
-        .order('first_seen_at', { ascending: true });
-      if (error) throw error;
-      const recent = (data ?? []) as OccurrenceStat[];
+      // Older occurrences are baked into seedData; fetch post-cutoff rows and concatenate.
+      // Disjoint by first_seen_at, so no dedup needed. Supabase caps each response at
+      // 1000 rows, so page with range() until a short page — otherwise the newest rows
+      // (most recent delays) silently fall off and the dashboard freezes.
+      const PAGE_SIZE = 1000;
+      const recent: OccurrenceStat[] = [];
+      for (let from = 0; ; from += PAGE_SIZE) {
+        const { data, error } = await db
+          .from('flight_occurrences')
+          .select('occurrence_key,source,route,flight_number,scheduled_at,first_seen_at,was_delayed,first_delayed_at,max_delay_minutes')
+          .gte('first_seen_at', SEED_CUTOFF)
+          .order('first_seen_at', { ascending: true })
+          .range(from, from + PAGE_SIZE - 1);
+        if (error) throw error;
+        recent.push(...((data ?? []) as OccurrenceStat[]));
+        if (!data || data.length < PAGE_SIZE) break;
+      }
 
       setLogs((logsResult.data ?? []) as FlightLog[]);
       setRuns((runsResult.data ?? []) as CollectionRun[]);
