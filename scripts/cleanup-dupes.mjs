@@ -87,8 +87,16 @@ async function mergeIntoTwin(twin, source) {
 }
 
 // ---- Class A: stale phantoms ----
+// Must ALSO have dropped out of the feed (not seen for 2h+): FIS legitimately lists the
+// whole day's flights from midnight, so a future schedule with a fresh last_seen is a
+// real flight, not a phantom.
+const NOW = Date.now();
 const classA = occ.filter(
-  (o) => o.scheduled_at && ts(o.scheduled_at) - ts(o.last_seen_at) > STALE_GAP && twinOf(o)
+  (o) =>
+    o.scheduled_at &&
+    ts(o.scheduled_at) - ts(o.last_seen_at) > STALE_GAP &&
+    NOW - ts(o.last_seen_at) > 2 * 3600e3 &&
+    twinOf(o)
 );
 const aKeys = new Set(classA.map((o) => o.occurrence_key));
 console.log(`\nClass A stale phantoms: ${classA.length} (${classA.filter((o) => o.was_delayed).length} flagged delayed)`);
